@@ -1,0 +1,27 @@
+{
+  "name": "noble-ripemd160",
+  "version": "0.1.0",
+  "description": "Noble RIPEMD160. High-security, easily auditable, zero-dependencies ripemd.",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "scripts": {
+    "compile": "tsc -d",
+    "test": "jest"
+  },
+  "jest": {
+    "testRegex": "/.*?\\.test.ts",
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    }
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^24.0.15",
+    "jest": "^24.8.0",
+    "ts-jest": "^24.0.2"
+  }
+}
