@@ -1,7 +1,7 @@
 {
   "name": "noble-ripemd160",
   "version": "0.1.0",
-  "description": "Noble RIPEMD160. High-security, easily auditable, zero-dependencies ripemd.",
+  "description": "Noble RIPEMD160. High-security, easily auditable, 0-dep, 1-file hash function.",
   "main": "index.js",
   "files": [
     "index.js",
@@ -23,5 +23,12 @@
     "@types/jest": "^24.0.15",
     "jest": "^24.8.0",
     "ts-jest": "^24.0.2"
-  }
+  },
+  "keywords": [
+    "ripemd160",
+    "ripemd",
+    "hash function",
+    "cryptography",
+    "security"
+  ]
 }
