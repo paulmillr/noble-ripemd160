@@ -15,14 +15,9 @@
   [ed25519](https://github.com/paulmillr/noble-ed25519),
   [ripemd160](https://github.com/paulmillr/noble-ripemd160)
 
-## API
-
-- `ripemd160(message: string): string`
-- `ripemd160(message: Uint8Array): Uint8Array`
-  - `message`: Message which will be hashed
-  - Function output type would match the input type.
-
 ## Usage
+
+> npm install noble-ripemd160
 
 ```js
 import ripemd160 from "noble-ripemd160";
@@ -41,6 +36,13 @@ const uint = ripemd160(new Uint8Array([97, 98, 99])); // TypedArray usage
 // (typed array representation of "8eb208f7e05d987a9b044a8e98c6b087f15a0bfc")
 
 ```
+
+## API
+
+- `ripemd160(message: string): string`
+- `ripemd160(message: Uint8Array): Uint8Array`
+  - `message`: Message which will be hashed
+  - Function output type would match the input type.
 
 ## License
 
