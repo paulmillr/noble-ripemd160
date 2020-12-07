@@ -8,14 +8,13 @@
 
 - No dependencies, one small file
 - Easily auditable TypeScript/JS code
-- Uses es2019 bigint. Supported in Chrome, Firefox, node 10+
+- Uses es2020 bigint. Supported in Chrome, Firefox, Safari, node 10+
 - All releases are signed and trusted
 - Check out all libraries:
   [secp256k1](https://github.com/paulmillr/noble-secp256k1),
   [ed25519](https://github.com/paulmillr/noble-ed25519),
   [bls12-381](https://github.com/paulmillr/noble-bls12-381),
-  [ripemd160](https://github.com/paulmillr/noble-ripemd160),
-  [secretbox-aes-gcm](https://github.com/paulmillr/noble-secretbox-aes-gcm)
+  [ripemd160](https://github.com/paulmillr/noble-ripemd160)
 
 ## Usage
 
@@ -27,7 +26,7 @@ import ripemd160 from "noble-ripemd160";
 const raw = ripemd160(""); // Raw string usage
 // "9c1185a5c5e9fc54612808977ee8f548b2258d31"
 
-const uint = ripemd160(new Uint8Array([97, 98, 99])); // TypedArray usage
+const uint = ripemd160(new Uint8Array([97, 98, 99])); // Uint8Array usage
 // Uint8Array [
 //   142, 178,   8, 247,
 //   224,  93, 152, 122,
