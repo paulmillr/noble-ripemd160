@@ -8,14 +8,17 @@
     "index.d.ts"
   ],
   "scripts": {
-    "compile": "tsc -d",
+    "bench": "node bench.js",
+    "build": "tsc -d",
     "test": "jest"
   },
   "jest": {
-    "testRegex": "/.*?\\.test.ts",
+    "testRegex": "index.test.ts",
     "transform": {
       "^.+\\.ts$": "ts-jest"
-    }
+    },
+    "useStderr": true,
+    "bail": 2
   },
   "author": "Paul Miller (https://paulmillr.com)",
   "homepage": "https://github.com/paulmillr/noble-ripemd160",
@@ -25,10 +28,11 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@types/jest": "^24.0.15",
-    "jest": "^24.8.0",
-    "ts-jest": "^24.0.2",
-    "typescript": "^3.5.2"
+    "@types/jest": "^26",
+    "@types/node": "^16.4.1",
+    "jest": "^27",
+    "ts-jest": "^27",
+    "typescript": "^4"
   },
   "keywords": [
     "ripemd160",

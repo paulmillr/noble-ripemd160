@@ -1,378 +1,193 @@
 /*! noble-ripemd160 - MIT License (c) Paul Miller (paulmillr.com) */
 // https://homes.esat.kuleuven.be/~bosselae/ripemd160.html
-// https://en.wikipedia.org/wiki/RIPEMD
-type DigestBuffer = Uint32Array;
-type TypedArray = Uint32Array | Uint8Array | Array<number | bigint>;
+// https://homes.esat.kuleuven.be/~bosselae/ripemd160/pdf/AB-9601/AB-9601.pdf
 
-const BLOCK_SIZE = 64;
-const OUTPUT_SIZE = 20;
-const DEFAULT_H = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
+// prettier-ignore
+const rl = Uint8Array.from([
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+  7, 4, 13, 1, 10, 6, 15, 3, 12, 0, 9, 5, 2, 14, 11, 8,
+  3, 10, 14, 4, 9, 15, 8, 1, 2, 7, 0, 6, 13, 11, 5, 12,
+  1, 9, 11, 10, 0, 8, 12, 4, 13, 3, 7, 15, 14, 5, 6, 2,
+  4, 0, 5, 9, 7, 12, 2, 10, 14, 1, 3, 8, 11, 6, 15, 13
+]);
 
-const f1 = (x: number, y: number, z: number) => x ^ y ^ z;
-const f2 = (x: number, y: number, z: number) => (x & y) | (~x & z);
-const f3 = (x: number, y: number, z: number) => (x | ~y) ^ z;
-const f4 = (x: number, y: number, z: number) => (x & z) | (y & ~z);
-const f5 = (x: number, y: number, z: number) => x ^ (y | ~z);
-const rol = (x: number, i: number) => (x << i) | (x >>> (32 - i));
+// prettier-ignore
+const rr = Uint8Array.from([
+  5, 14, 7, 0, 9, 2, 11, 4, 13, 6, 15, 8, 1, 10, 3, 12,
+  6, 11, 3, 7, 0, 13, 5, 10, 14, 15, 8, 12, 4, 9, 1, 2,
+  15, 5, 1, 3, 7, 14, 6, 9, 11, 8, 12, 2, 10, 0, 4, 13,
+  8, 6, 4, 1, 3, 11, 15, 0, 5, 12, 2, 13, 9, 7, 10, 14,
+  12, 15, 10, 4, 1, 5, 8, 7, 6, 2, 13, 14, 0, 3, 9, 11
+]);
 
-const slice = (arr: TypedArray, start: number = 0, end: number = arr.length): Uint32Array => {
-  if (arr instanceof Uint32Array) {
-    return arr.slice(start, end);
-  }
-  const result = new Uint32Array(end - start);
-  for (let i = start, j = 0; i < end; i++, j++) {
-    result[j] = Number(arr[i]);
-  }
-  return result;
-};
+// prettier-ignore
+const sl = Uint8Array.from([
+  11, 14, 15, 12, 5, 8, 7, 9, 11, 13, 14, 15, 6, 7, 9, 8,
+  7, 6, 8, 13, 11, 9, 7, 15, 7, 12, 15, 9, 11, 7, 13, 12,
+  11, 13, 6, 7, 14, 9, 13, 15, 14, 8, 13, 6, 5, 12, 7, 5,
+  11, 12, 14, 15, 14, 15, 9, 8, 9, 14, 5, 6, 8, 6, 5, 12,
+  9, 15, 5, 11, 6, 8, 13, 12, 5, 12, 13, 14, 11, 8, 5, 6
+]);
 
-const readLE32 = (ptr: TypedArray, padding: number = 0): number =>
-  (Number(ptr[padding + 3]) << 24) |
-  (Number(ptr[padding + 2]) << 16) |
-  (Number(ptr[padding + 1]) << 8) |
-  Number(ptr[padding]);
+// prettier-ignore
+const sr = Uint8Array.from([
+  8, 9, 9, 11, 13, 15, 15, 5, 7, 7, 8, 11, 14, 14, 12, 6,
+  9, 13, 15, 7, 12, 8, 9, 11, 7, 7, 12, 7, 6, 15, 13, 11,
+  9, 7, 15, 11, 8, 6, 6, 14, 12, 13, 5, 14, 13, 13, 7, 5,
+  15, 5, 8, 11, 14, 14, 6, 14, 6, 9, 12, 9, 12, 5, 15, 8,
+  8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
+]);
 
-const writeLE32 = (ptr: TypedArray, padding: number, x: number): void => {
-  ptr[padding + 3] = x >>> 24;
-  ptr[padding + 2] = x >>> 16;
-  ptr[padding + 1] = x >>> 8;
-  ptr[padding] = x >>> 0;
-};
+const Kl = Uint32Array.from([0x00000000, 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xa953fd4e]);
+const Kr = Uint32Array.from([0x50a28be6, 0x5c4dd124, 0x6d703ef3, 0x7a6d76e9, 0x00000000]);
 
-const writeLE64 = (ptr: Array<bigint>, padding: number, x: bigint | number): void => {
-  x = BigInt(x);
-  ptr[padding + 7] = x >> 56n;
-  ptr[padding + 6] = x >> 48n;
-  ptr[padding + 5] = x >> 40n;
-  ptr[padding + 4] = x >> 32n;
-  ptr[padding + 3] = x >> 24n;
-  ptr[padding + 2] = x >> 16n;
-  ptr[padding + 1] = x >> 8n;
-  ptr[padding] = x;
-};
-
-const Round = (a: number, b: number, c: number, d: number, e: number, f: number, x: number,
-  k: number, r: number): Uint32Array =>
-  new Uint32Array([rol(a + f + x + k, r) + e, rol(c, 10)]);
-
-const R11 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f1(b, c, d), x, 0, r);
-
-const R21 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f2(b, c, d), x, 0x5a827999, r);
-
-const R31 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f3(b, c, d), x, 0x6ed9eba1, r);
-
-const R41 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f4(b, c, d), x, 0x8f1bbcdc, r);
-
-const R51 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f5(b, c, d), x, 0xa953fd4e, r);
-
-const R12 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f5(b, c, d), x, 0x50a28be6, r);
-
-const R22 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f4(b, c, d), x, 0x5c4dd124, r);
-
-const R32 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f3(b, c, d), x, 0x6d703ef3, r);
-
-const R42 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f2(b, c, d), x, 0x7a6d76e9, r);
-
-const R52 = (a: number, b: number, c: number, d: number, e: number, x: number, r: number) =>
-  Round(a, b, c, d, e, f1(b, c, d), x, 0, r);
-
-function getBinaryFromString(str: string): Uint32Array {
-  const len = str.length;
-  const result = new Uint32Array(len);
-  for (let i = 0; i < len; i++) {
-    result[i] = str.charCodeAt(i);
-  }
-  return result;
+function rotl(x: number, n: number): number {
+  return (x << n) | (x >>> (32 - n));
 }
 
-class Ripemd160 {
-  constructor(
-    private h: DigestBuffer = new Uint32Array(DEFAULT_H),
-    private bytes: number = 0,
-    private buffer: Uint32Array = new Uint32Array(BLOCK_SIZE)
-  ) {}
-
-  input(str: string) {
-    const input = getBinaryFromString(str);
-    // @ts-ignore
-    this.write(input, input.length);
-  }
-
-  processBlock(chunk: TypedArray) {
-    const s = this.h;
-    let a1 = s[0],
-      b1 = s[1],
-      c1 = s[2],
-      d1 = s[3],
-      e1 = s[4];
-    let a2 = a1,
-      b2 = b1,
-      c2 = c1,
-      d2 = d1,
-      e2 = e1;
-    let w0 = readLE32(chunk, 0),
-      w1 = readLE32(chunk, 4),
-      w2 = readLE32(chunk, 8),
-      w3 = readLE32(chunk, 12);
-    let w4 = readLE32(chunk, 16),
-      w5 = readLE32(chunk, 20),
-      w6 = readLE32(chunk, 24),
-      w7 = readLE32(chunk, 28);
-    let w8 = readLE32(chunk, 32),
-      w9 = readLE32(chunk, 36),
-      w10 = readLE32(chunk, 40),
-      w11 = readLE32(chunk, 44);
-    let w12 = readLE32(chunk, 48),
-      w13 = readLE32(chunk, 52),
-      w14 = readLE32(chunk, 56),
-      w15 = readLE32(chunk, 60);
-
-    [a1, c1] = R11(a1, b1, c1, d1, e1, w0, 11);
-    [a2, c2] = R12(a2, b2, c2, d2, e2, w5, 8);
-    [e1, b1] = R11(e1, a1, b1, c1, d1, w1, 14);
-    [e2, b2] = R12(e2, a2, b2, c2, d2, w14, 9);
-    [d1, a1] = R11(d1, e1, a1, b1, c1, w2, 15);
-    [d2, a2] = R12(d2, e2, a2, b2, c2, w7, 9);
-    [c1, e1] = R11(c1, d1, e1, a1, b1, w3, 12);
-    [c2, e2] = R12(c2, d2, e2, a2, b2, w0, 11);
-    [b1, d1] = R11(b1, c1, d1, e1, a1, w4, 5);
-    [b2, d2] = R12(b2, c2, d2, e2, a2, w9, 13);
-    [a1, c1] = R11(a1, b1, c1, d1, e1, w5, 8);
-    [a2, c2] = R12(a2, b2, c2, d2, e2, w2, 15);
-    [e1, b1] = R11(e1, a1, b1, c1, d1, w6, 7);
-    [e2, b2] = R12(e2, a2, b2, c2, d2, w11, 15);
-    [d1, a1] = R11(d1, e1, a1, b1, c1, w7, 9);
-    [d2, a2] = R12(d2, e2, a2, b2, c2, w4, 5);
-    [c1, e1] = R11(c1, d1, e1, a1, b1, w8, 11);
-    [c2, e2] = R12(c2, d2, e2, a2, b2, w13, 7);
-    [b1, d1] = R11(b1, c1, d1, e1, a1, w9, 13);
-    [b2, d2] = R12(b2, c2, d2, e2, a2, w6, 7);
-    [a1, c1] = R11(a1, b1, c1, d1, e1, w10, 14);
-    [a2, c2] = R12(a2, b2, c2, d2, e2, w15, 8);
-    [e1, b1] = R11(e1, a1, b1, c1, d1, w11, 15);
-    [e2, b2] = R12(e2, a2, b2, c2, d2, w8, 11);
-    [d1, a1] = R11(d1, e1, a1, b1, c1, w12, 6);
-    [d2, a2] = R12(d2, e2, a2, b2, c2, w1, 14);
-    [c1, e1] = R11(c1, d1, e1, a1, b1, w13, 7);
-    [c2, e2] = R12(c2, d2, e2, a2, b2, w10, 14);
-    [b1, d1] = R11(b1, c1, d1, e1, a1, w14, 9);
-    [b2, d2] = R12(b2, c2, d2, e2, a2, w3, 12);
-    [a1, c1] = R11(a1, b1, c1, d1, e1, w15, 8);
-    [a2, c2] = R12(a2, b2, c2, d2, e2, w12, 6);
-
-    [e1, b1] = R21(e1, a1, b1, c1, d1, w7, 7);
-    [e2, b2] = R22(e2, a2, b2, c2, d2, w6, 9);
-    [d1, a1] = R21(d1, e1, a1, b1, c1, w4, 6);
-    [d2, a2] = R22(d2, e2, a2, b2, c2, w11, 13);
-    [c1, e1] = R21(c1, d1, e1, a1, b1, w13, 8);
-    [c2, e2] = R22(c2, d2, e2, a2, b2, w3, 15);
-    [b1, d1] = R21(b1, c1, d1, e1, a1, w1, 13);
-    [b2, d2] = R22(b2, c2, d2, e2, a2, w7, 7);
-    [a1, c1] = R21(a1, b1, c1, d1, e1, w10, 11);
-    [a2, c2] = R22(a2, b2, c2, d2, e2, w0, 12);
-    [e1, b1] = R21(e1, a1, b1, c1, d1, w6, 9);
-    [e2, b2] = R22(e2, a2, b2, c2, d2, w13, 8);
-    [d1, a1] = R21(d1, e1, a1, b1, c1, w15, 7);
-    [d2, a2] = R22(d2, e2, a2, b2, c2, w5, 9);
-    [c1, e1] = R21(c1, d1, e1, a1, b1, w3, 15);
-    [c2, e2] = R22(c2, d2, e2, a2, b2, w10, 11);
-    [b1, d1] = R21(b1, c1, d1, e1, a1, w12, 7);
-    [b2, d2] = R22(b2, c2, d2, e2, a2, w14, 7);
-    [a1, c1] = R21(a1, b1, c1, d1, e1, w0, 12);
-    [a2, c2] = R22(a2, b2, c2, d2, e2, w15, 7);
-    [e1, b1] = R21(e1, a1, b1, c1, d1, w9, 15);
-    [e2, b2] = R22(e2, a2, b2, c2, d2, w8, 12);
-    [d1, a1] = R21(d1, e1, a1, b1, c1, w5, 9);
-    [d2, a2] = R22(d2, e2, a2, b2, c2, w12, 7);
-    [c1, e1] = R21(c1, d1, e1, a1, b1, w2, 11);
-    [c2, e2] = R22(c2, d2, e2, a2, b2, w4, 6);
-    [b1, d1] = R21(b1, c1, d1, e1, a1, w14, 7);
-    [b2, d2] = R22(b2, c2, d2, e2, a2, w9, 15);
-    [a1, c1] = R21(a1, b1, c1, d1, e1, w11, 13);
-    [a2, c2] = R22(a2, b2, c2, d2, e2, w1, 13);
-    [e1, b1] = R21(e1, a1, b1, c1, d1, w8, 12);
-    [e2, b2] = R22(e2, a2, b2, c2, d2, w2, 11);
-
-    [d1, a1] = R31(d1, e1, a1, b1, c1, w3, 11);
-    [d2, a2] = R32(d2, e2, a2, b2, c2, w15, 9);
-    [c1, e1] = R31(c1, d1, e1, a1, b1, w10, 13);
-    [c2, e2] = R32(c2, d2, e2, a2, b2, w5, 7);
-    [b1, d1] = R31(b1, c1, d1, e1, a1, w14, 6);
-    [b2, d2] = R32(b2, c2, d2, e2, a2, w1, 15);
-    [a1, c1] = R31(a1, b1, c1, d1, e1, w4, 7);
-    [a2, c2] = R32(a2, b2, c2, d2, e2, w3, 11);
-    [e1, b1] = R31(e1, a1, b1, c1, d1, w9, 14);
-    [e2, b2] = R32(e2, a2, b2, c2, d2, w7, 8);
-    [d1, a1] = R31(d1, e1, a1, b1, c1, w15, 9);
-    [d2, a2] = R32(d2, e2, a2, b2, c2, w14, 6);
-    [c1, e1] = R31(c1, d1, e1, a1, b1, w8, 13);
-    [c2, e2] = R32(c2, d2, e2, a2, b2, w6, 6);
-    [b1, d1] = R31(b1, c1, d1, e1, a1, w1, 15);
-    [b2, d2] = R32(b2, c2, d2, e2, a2, w9, 14);
-    [a1, c1] = R31(a1, b1, c1, d1, e1, w2, 14);
-    [a2, c2] = R32(a2, b2, c2, d2, e2, w11, 12);
-    [e1, b1] = R31(e1, a1, b1, c1, d1, w7, 8);
-    [e2, b2] = R32(e2, a2, b2, c2, d2, w8, 13);
-    [d1, a1] = R31(d1, e1, a1, b1, c1, w0, 13);
-    [d2, a2] = R32(d2, e2, a2, b2, c2, w12, 5);
-    [c1, e1] = R31(c1, d1, e1, a1, b1, w6, 6);
-    [c2, e2] = R32(c2, d2, e2, a2, b2, w2, 14);
-    [b1, d1] = R31(b1, c1, d1, e1, a1, w13, 5);
-    [b2, d2] = R32(b2, c2, d2, e2, a2, w10, 13);
-    [a1, c1] = R31(a1, b1, c1, d1, e1, w11, 12);
-    [a2, c2] = R32(a2, b2, c2, d2, e2, w0, 13);
-    [e1, b1] = R31(e1, a1, b1, c1, d1, w5, 7);
-    [e2, b2] = R32(e2, a2, b2, c2, d2, w4, 7);
-    [d1, a1] = R31(d1, e1, a1, b1, c1, w12, 5);
-    [d2, a2] = R32(d2, e2, a2, b2, c2, w13, 5);
-
-    [c1, e1] = R41(c1, d1, e1, a1, b1, w1, 11);
-    [c2, e2] = R42(c2, d2, e2, a2, b2, w8, 15);
-    [b1, d1] = R41(b1, c1, d1, e1, a1, w9, 12);
-    [b2, d2] = R42(b2, c2, d2, e2, a2, w6, 5);
-    [a1, c1] = R41(a1, b1, c1, d1, e1, w11, 14);
-    [a2, c2] = R42(a2, b2, c2, d2, e2, w4, 8);
-    [e1, b1] = R41(e1, a1, b1, c1, d1, w10, 15);
-    [e2, b2] = R42(e2, a2, b2, c2, d2, w1, 11);
-    [d1, a1] = R41(d1, e1, a1, b1, c1, w0, 14);
-    [d2, a2] = R42(d2, e2, a2, b2, c2, w3, 14);
-    [c1, e1] = R41(c1, d1, e1, a1, b1, w8, 15);
-    [c2, e2] = R42(c2, d2, e2, a2, b2, w11, 14);
-    [b1, d1] = R41(b1, c1, d1, e1, a1, w12, 9);
-    [b2, d2] = R42(b2, c2, d2, e2, a2, w15, 6);
-    [a1, c1] = R41(a1, b1, c1, d1, e1, w4, 8);
-    [a2, c2] = R42(a2, b2, c2, d2, e2, w0, 14);
-    [e1, b1] = R41(e1, a1, b1, c1, d1, w13, 9);
-    [e2, b2] = R42(e2, a2, b2, c2, d2, w5, 6);
-    [d1, a1] = R41(d1, e1, a1, b1, c1, w3, 14);
-    [d2, a2] = R42(d2, e2, a2, b2, c2, w12, 9);
-    [c1, e1] = R41(c1, d1, e1, a1, b1, w7, 5);
-    [c2, e2] = R42(c2, d2, e2, a2, b2, w2, 12);
-    [b1, d1] = R41(b1, c1, d1, e1, a1, w15, 6);
-    [b2, d2] = R42(b2, c2, d2, e2, a2, w13, 9);
-    [a1, c1] = R41(a1, b1, c1, d1, e1, w14, 8);
-    [a2, c2] = R42(a2, b2, c2, d2, e2, w9, 12);
-    [e1, b1] = R41(e1, a1, b1, c1, d1, w5, 6);
-    [e2, b2] = R42(e2, a2, b2, c2, d2, w7, 5);
-    [d1, a1] = R41(d1, e1, a1, b1, c1, w6, 5);
-    [d2, a2] = R42(d2, e2, a2, b2, c2, w10, 15);
-    [c1, e1] = R41(c1, d1, e1, a1, b1, w2, 12);
-    [c2, e2] = R42(c2, d2, e2, a2, b2, w14, 8);
-
-    [b1, d1] = R51(b1, c1, d1, e1, a1, w4, 9);
-    [b2, d2] = R52(b2, c2, d2, e2, a2, w12, 8);
-    [a1, c1] = R51(a1, b1, c1, d1, e1, w0, 15);
-    [a2, c2] = R52(a2, b2, c2, d2, e2, w15, 5);
-    [e1, b1] = R51(e1, a1, b1, c1, d1, w5, 5);
-    [e2, b2] = R52(e2, a2, b2, c2, d2, w10, 12);
-    [d1, a1] = R51(d1, e1, a1, b1, c1, w9, 11);
-    [d2, a2] = R52(d2, e2, a2, b2, c2, w4, 9);
-    [c1, e1] = R51(c1, d1, e1, a1, b1, w7, 6);
-    [c2, e2] = R52(c2, d2, e2, a2, b2, w1, 12);
-    [b1, d1] = R51(b1, c1, d1, e1, a1, w12, 8);
-    [b2, d2] = R52(b2, c2, d2, e2, a2, w5, 5);
-    [a1, c1] = R51(a1, b1, c1, d1, e1, w2, 13);
-    [a2, c2] = R52(a2, b2, c2, d2, e2, w8, 14);
-    [e1, b1] = R51(e1, a1, b1, c1, d1, w10, 12);
-    [e2, b2] = R52(e2, a2, b2, c2, d2, w7, 6);
-    [d1, a1] = R51(d1, e1, a1, b1, c1, w14, 5);
-    [d2, a2] = R52(d2, e2, a2, b2, c2, w6, 8);
-    [c1, e1] = R51(c1, d1, e1, a1, b1, w1, 12);
-    [c2, e2] = R52(c2, d2, e2, a2, b2, w2, 13);
-    [b1, d1] = R51(b1, c1, d1, e1, a1, w3, 13);
-    [b2, d2] = R52(b2, c2, d2, e2, a2, w13, 6);
-    [a1, c1] = R51(a1, b1, c1, d1, e1, w8, 14);
-    [a2, c2] = R52(a2, b2, c2, d2, e2, w14, 5);
-    [e1, b1] = R51(e1, a1, b1, c1, d1, w11, 11);
-    [e2, b2] = R52(e2, a2, b2, c2, d2, w0, 15);
-    [d1, a1] = R51(d1, e1, a1, b1, c1, w6, 8);
-    [d2, a2] = R52(d2, e2, a2, b2, c2, w3, 13);
-    [c1, e1] = R51(c1, d1, e1, a1, b1, w15, 5);
-    [c2, e2] = R52(c2, d2, e2, a2, b2, w9, 11);
-    [b1, d1] = R51(b1, c1, d1, e1, a1, w13, 6);
-    [b2, d2] = R52(b2, c2, d2, e2, a2, w11, 11);
-
-    const t = s[0];
-    s[0] = s[1] + c1 + d2;
-    s[1] = s[2] + d1 + e2;
-    s[2] = s[3] + e1 + a2;
-    s[3] = s[4] + a1 + b2;
-    s[4] = t + b1 + c2;
-  }
-
-  write(data: TypedArray, len: number) {
-    let bufsize = this.bytes % 64;
-    let padding = 0;
-    if (bufsize && bufsize + len >= BLOCK_SIZE) {
-      // Fill the buffer, and process it.
-      this.buffer.set(slice(data, 0, BLOCK_SIZE - bufsize), bufsize);
-      this.bytes += BLOCK_SIZE - bufsize;
-      padding += BLOCK_SIZE - bufsize;
-      this.processBlock(this.buffer);
-      bufsize = 0;
-    }
-    while (len - padding >= 64) {
-      // Process full chunks direct lofrom the source.
-      this.processBlock(slice(data, padding, padding + BLOCK_SIZE));
-      this.bytes += BLOCK_SIZE;
-      padding += BLOCK_SIZE;
-    }
-    if (len > padding) {
-      // Fill the buffer with what remains.
-      this.buffer.set(slice(data, padding, len), bufsize);
-      this.bytes += len - padding;
-    }
-  }
-
-  result(): Uint32Array {
-    const { h, bytes } = this;
-    const pad = new Uint32Array(BLOCK_SIZE);
-    const hash = new Uint32Array(OUTPUT_SIZE);
-    pad[0] = 0x80;
-    const sizedesc = new Array<bigint>(8);
-    writeLE64(sizedesc, 0, bytes << 3);
-    this.write(pad, 1 + ((119 - (bytes % 64)) % 64));
-    this.write(sizedesc, 8);
-    writeLE32(hash, 0, h[0]);
-    writeLE32(hash, 4, h[1]);
-    writeLE32(hash, 8, h[2]);
-    writeLE32(hash, 12, h[3]);
-    writeLE32(hash, 16, h[4]);
-    return hash;
-  }
+// It's called f() in spec.
+function f(group: number, x: number, y: number, z: number): number {
+  if (group === 0) return x ^ y ^ z;
+  else if (group === 1) return (x & y) | (~x & z);
+  else if (group === 2) return (x | ~y) ^ z;
+  else if (group === 3) return (x & z) | (y & ~z);
+  else return x ^ (y | ~z);
 }
 
-function u32to8(u32: Uint32Array): Uint8Array {
-  const u8 = new Uint8Array(u32.length);
-  for (let i = 0; i < u32.length; i++) {
-    const hs = (u32[i] & 255).toString(16);
-    u8[i] = parseInt(`0${hs}`.slice(-2), 16)
+export class RIPEMD160 {
+  private h0 = 0x67452301 | 0;
+  private h1 = 0xefcdab89 | 0;
+  private h2 = 0x98badcfe | 0;
+  private h3 = 0x10325476 | 0;
+  private h4 = 0xc3d2e1f0 | 0;
+  private block = new Uint8Array(64);
+  private blockSize = 64;
+  private offset = 0;
+  private length = new Uint32Array(4);
+  private finalized = false;
+  private view: DataView;
+
+  constructor() {
+    this.view = new DataView(this.block.buffer);
   }
-  return u8;
+
+  update(data: Uint8Array) {
+    if (this.finalized) throw new Error('Digest already called');
+
+    // consume data
+    const block = this.block;
+    let offset = 0;
+    while (this.offset + data.length - offset >= this.blockSize) {
+      for (let i = this.offset; i < this.blockSize; ) block[i++] = data[offset++];
+      this.compress();
+      this.offset = 0;
+    }
+    while (offset < data.length) block[this.offset++] = data[offset++];
+
+    // update length
+    for (let j = 0, carry = data.length * 8; carry > 0; j++) {
+      let len = this.length[j];
+      len += carry;
+      carry = (len / 0x0100000000) | 0;
+      if (carry > 0) len -= 0x0100000000 * carry;
+      this.length[j] = len;
+    }
+
+    return this;
+  }
+
+  private compress() {
+    const wordBlocks = new Uint32Array(16);
+    for (let i = 0; i < 16; i++) {
+      wordBlocks[i] = this.view.getInt32(i * 4, true);
+    }
+
+    // prettier-ignore
+    let al = this.h0 | 0, ar = al,
+        bl = this.h1 | 0, br = bl,
+        cl = this.h2 | 0, cr = cl,
+        dl = this.h3 | 0, dr = dl,
+        el = this.h4 | 0, er = el;
+
+    // Instead of iterating 0 to 80, we split it into 5 groups
+    // And use the groups in constants, functions, etc. Much simpler
+    for (let group = 0; group < 5; group++) {
+      const rGroup = 4 - group;
+      const hbl = Kl[group];
+      const hbr = Kr[group];
+      for (let i = 0; i < 16; i++) {
+        const j = 16 * group + i;
+        const tl = (rotl(al + f(group, bl, cl, dl) + wordBlocks[rl[j]] + hbl, sl[j]) + el) | 0;
+        al = el, el = dl, dl = rotl(cl, 10) | 0, cl = bl, bl = tl; // prettier-ignore
+      }
+      // 2 loops are 10% faster
+      for (let i = 0; i < 16; i++) {
+        const j = 16 * group + i;
+        const tr = (rotl(ar + f(rGroup, br, cr, dr) + wordBlocks[rr[j]] + hbr, sr[j]) + er) | 0;
+        ar = er, er = dr, dr = rotl(cr, 10) | 0, cr = br, br = tr; // prettier-ignore
+      }
+    }
+
+    // update state
+    const t = (this.h1 + cl + dr) | 0;
+    this.h1 = (this.h2 + dl + er) | 0;
+    this.h2 = (this.h3 + el + ar) | 0;
+    this.h3 = (this.h4 + al + br) | 0;
+    this.h4 = (this.h0 + bl + cr) | 0;
+    this.h0 = t;
+  }
+
+  digest(): Uint8Array {
+    if (this.finalized) throw new Error('Digest already called');
+    this.finalized = true;
+
+    // create padding and handle blocks
+    this.block[this.offset++] = 0x80;
+    if (this.offset > 56) {
+      this.block.fill(0, this.offset, 64);
+      this.compress();
+      this.offset = 0;
+    }
+
+    this.block.fill(0, this.offset, 56);
+    this.view.setUint32(56, this.length[0], true);
+    this.view.setUint32(60, this.length[1], true);
+    this.compress();
+
+    // produce result
+    const res = new DataView(new ArrayBuffer(20));
+    res.setInt32(0, this.h0, true);
+    res.setInt32(4, this.h1, true);
+    res.setInt32(8, this.h2, true);
+    res.setInt32(12, this.h3, true);
+    res.setInt32(16, this.h4, true);
+
+    // reset state
+    this.block.fill(0);
+    this.offset = 0;
+    for (let i = 0; i < 4; i++) {
+      this.length[i] = 0;
+    }
+
+    return new Uint8Array(res.buffer);
+  }
 }
 
 function toHex(uint8a: Uint8Array): string {
-  return Array.from(uint8a).map(c => c.toString(16).padStart(2, '0')).join('');
+  return Array.from(uint8a)
+    .map((c) => c.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function utf8ToBytes(str: string): Uint8Array {
+  return new TextEncoder().encode(str);
 }
 
 export default function ripemd160(message: Uint8Array): Uint8Array;
 export default function ripemd160(message: string): string;
 export default function ripemd160(message: string | Uint8Array): string | Uint8Array {
-  const hasher = new Ripemd160();
-  if (typeof message === "string") {
-    hasher.input(message);
-  } else {
-    hasher.write(message, message.length);
-  }
-  const hash = u32to8(hasher.result());
-  return typeof message === "string" ? toHex(hash) : hash;
+  const hasher = new RIPEMD160();
+  hasher.update(message instanceof Uint8Array ? message : utf8ToBytes(message));
+  const hash = hasher.digest();
+  return typeof message === 'string' ? toHex(hash) : hash;
 }
