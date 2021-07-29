@@ -1,6 +1,8 @@
 # noble-ripemd160
 
-[RIPEMD160](https://en.wikipedia.org/wiki/RIPEMD), a cryptographic hash function.
+Fast implementation of [RIPEMD160](https://en.wikipedia.org/wiki/RIPEMD), a cryptographic hash function.
+
+Check out [RIPEMD specification](https://homes.esat.kuleuven.be/~bosselae/ripemd160.html).
 
 ### This library belongs to *noble* crypto
 

@@ -1,6 +1,6 @@
 {
   "name": "noble-ripemd160",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Noble RIPEMD160. High-security, easily auditable, 0-dep, 1-file hash function.",
   "main": "index.js",
   "files": [
