@@ -1,5 +1,7 @@
 # noble-ripemd160
 
+**Deprecated. Switch to [noble-hashes](https://github.com/paulmillr/noble-hashes).**
+
 Fast implementation of [RIPEMD160](https://en.wikipedia.org/wiki/RIPEMD), a cryptographic hash function.
 
 Check out [RIPEMD specification](https://homes.esat.kuleuven.be/~bosselae/ripemd160.html).
@@ -15,8 +17,7 @@ Check out [RIPEMD specification](https://homes.esat.kuleuven.be/~bosselae/ripemd
 - Check out all libraries:
   [secp256k1](https://github.com/paulmillr/noble-secp256k1),
   [ed25519](https://github.com/paulmillr/noble-ed25519),
-  [bls12-381](https://github.com/paulmillr/noble-bls12-381),
-  [ripemd160](https://github.com/paulmillr/noble-ripemd160)
+  [bls12-381](https://github.com/paulmillr/noble-bls12-381)
 
 ## Usage
 
